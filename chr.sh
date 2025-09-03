@@ -23,12 +23,7 @@ case $ARCH in
         exit 1
         ;;
 esac
-STORAGE=$(for d in /sys/block/*; do
-    case $(basename $d) in
-        loop*|ram*|sr*) continue ;;
-        *) echo $(basename $d); break ;;
-    esac
-done)
+STORAGE=$(lsblk -d -n -o NAME,TYPE | awk '$2=="disk"{print $1; exit}')
 echo "STORAGE: $STORAGE"
 ETH=$(ip route show default | grep '^default' | sed -n 's/.* dev \([^\ ]*\) .*/\1/p')
 echo "ETH: $ETH"
@@ -40,19 +35,18 @@ DNS=$(grep '^nameserver' /etc/resolv.conf | awk '{print $2}' | head -n 1)
 [ -z "$DNS" ] && DNS="8.8.8.8"  
 echo "DNS: $DNS"
 
-
-echo "WARNING: All data on /dev/$STORAGE will be lost!"
-read -p "Do you want to continue? [Y/n]: " confirm < /dev/tty
-confirm=${confirm:-Y}
-if [[ "$confirm" =~ ^[Nn]$ ]]; then
-    echo "Operation aborted."
+echo "FILE: $(basename $IMG_URL)"
+if command -v wget >/dev/null 2>&1; then
+    wget --no-check-certificate -O /tmp/chr.img.zip "$IMG_URL" || { echo "Download failed!"; exit 1; }
+elif command -v curl >/dev/null 2>&1; then
+    curl -L --insecure -o /tmp/chr.img.zip "$IMG_URL" || { echo "Download failed!"; exit 1; }
+else
+    echo "Neither wget nor curl is installed. Cannot download $url"
     exit 1
 fi
-
-echo "FILE: $(basename $IMG_URL)"
-wget --no-check-certificate -O /tmp/chr.img.zip "$IMG_URL" || echo "Download failed!"
 cd /tmp
-unzip -p chr.img.zip > chr.img
+gunzip -c chr.img.zip  > chr.img
+RANDOM_PASS=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 8)
 if LOOP=$(losetup -Pf --show chr.img 2>/dev/null); then
     sleep 3
     MNT=/tmp/chr
@@ -62,13 +56,23 @@ if LOOP=$(losetup -Pf --show chr.img 2>/dev/null); then
 /ip address add address=$ADDRESS interface=ether1
 /ip route add gateway=$GATEWAY
 /ip dns set servers=$DNS
+/user set admin password="$RANDOM_PASS"
 EOF
         echo "autorun.scr file created."
+        echo -e "admin password: \e[31m$RANDOM_PASS\e[0m"
         umount $MNT
     else
         echo "Failed to mount partition 2, skipping autorun.scr creation."
     fi
     losetup -d $LOOP
+fi
+
+echo "WARNING: All data on /dev/$STORAGE will be lost!"
+read -p "Do you want to continue? [Y/n]: " confirm < /dev/tty
+confirm=${confirm:-Y}
+if [[ "$confirm" =~ ^[Nn]$ ]]; then
+    echo "Operation aborted."
+    exit 1
 fi
 
 dd if=chr.img of=/dev/$STORAGE bs=4M conv=fsync
