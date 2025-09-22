@@ -1,6 +1,9 @@
 [![Patch Mikrotik RouterOS 6.x](https://github.com/elseif/MikroTikPatch/actions/workflows/mikrotik_patch_6.yml/badge.svg)](https://github.com/elseif/MikroTikPatch/actions/workflows/mikrotik_patch_6.yml)
 [![Patch Mikrotik RouterOS 7.x](https://github.com/elseif/MikroTikPatch/actions/workflows/mikrotik_patch_7.yml/badge.svg)](https://github.com/elseif/MikroTikPatch/actions/workflows/mikrotik_patch_7.yml)
 
+### 感谢赞助
+[DartNode(aff)](https://dartnode.com?aff=SnazzyLobster067) | [ZMTO(aff)](https://console.zmto.com/?affid=1588) | [Vultr(aff)](https://www.vultr.com/?ref=9807160-9J)
+
 # MikroTik RouterOS Patch  [[English](README_EN.md)]
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](./LICENSE)
 [![CoC:WTFCoC](https://img.shields.io/badge/CoC-WTFCoC-brightgreen.svg)](./CODE_OF_CONDUCT.md)
@@ -22,7 +25,7 @@ graph TD
     B -->|否| D[检查 rc.local 文件是否存在]
     C --> D
     D -->|是| E[fork 执行 /bin/sh rc.local]
-    D -->|否| F[结束]
+    D -->|否| F[启动服务]
     E --> F
 ```
 ![](image/install.png)
@@ -60,10 +63,10 @@ graph TD
     
 ## 所有的修补操作都自动运行在[Github Action](https://github.com/elseif/MikroTikPatch/blob/main/.github/workflows/)。
 
-### 感谢赞助
-[ZMTO](https://console.zmto.com)
 
-[![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
+
+
+
 
 
 

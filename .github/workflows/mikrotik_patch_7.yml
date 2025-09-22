@@ -246,6 +246,16 @@ jobs:
                 sudo -E python3 npk.py sign "$file" "$file"
             done
         fi
+        if [ "$LATEST_VERSION" = "7.12.1" ]; then
+            URL="https://download.mikrotik.com/routeros/$LATEST_VERSION/routeros-${{ matrix.arch }}-$LATEST_VERSION.npk"
+            sudo wget -nv -O "routeros-${{ matrix.arch }}-$LATEST_VERSION.npk" "$URL"
+            sudo -E python3 patch.py npk routeros-${{ matrix.arch }}-$LATEST_VERSION.npk
+            sudo mv "routeros-${{ matrix.arch }}-$LATEST_VERSION.npk" ./new_iso
+            URL="https://download.mikrotik.com/routeros/$LATEST_VERSION/system-$LATEST_VERSION.npk"
+            sudo wget -nv -O "system-$LATEST_VERSION.npk" "$URL"
+            sudo -E python3 patch.py npk system-$LATEST_VERSION.npk
+            sudo mv "system-$LATEST_VERSION.npk" ./new_iso
+        fi
         sudo cp -f routeros-$LATEST_VERSION$ARCH.npk ./new_iso/
         sudo -E python3 npk.py create ./new_iso/gps-$LATEST_VERSION$ARCH.npk ./option-$LATEST_VERSION$ARCH.npk option ./option.sfs -desc="busybox"
         sudo cp option-$LATEST_VERSION$ARCH.npk ./new_iso/
@@ -322,7 +332,7 @@ jobs:
           </References>
           <DiskSection>
             <Info>Virtual disk information</Info>
-            <Disk ovf:capacity="{CAPACITY_MB}" ovf:capacityAllocationUnits="byte * 2^20" ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized" ovf:populatedSize="{POPULATED_SIZE}"/>
+            <Disk ovf:capacity="{CAPACITY_MB}" ovf:capacityAllocationUnits="byte * 2^20" ovf:diskId="vmdisk1" ovf:fileRef="file1" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"/>
           </DiskSection>
           <NetworkSection>
             <Info>The list of logical networks</Info>
@@ -674,14 +684,22 @@ jobs:
         sudo -E python3 patch.py netinstall netinstall-cli
         sudo tar -czvf netinstall-$LATEST_VERSION.tar.gz ./netinstall-cli
 
-    - name: Upload Files
+    - name: Prepare for Upload
       if: steps.get_latest.outputs.has_new_version == 'true' && env.RELEASE == 'true'
       run: |
         sudo mkdir -p ./publish/$LATEST_VERSION
         sudo cp CHANGELOG ./publish/$LATEST_VERSION/
         sudo cp ./all_packages/*.npk ./publish/$LATEST_VERSION/
+        # sudo cp mikrotik-${{ env.LATEST_VERSION }}${{ env.ARCH }}.iso ./publish/$LATEST_VERSION/ 2>/dev/null || true
+        # sudo cp chr-${{ env.LATEST_VERSION }}*.zip ./publish/$LATEST_VERSION/ 2>/dev/null || true
+        # sudo cp netinstall-${{ env.LATEST_VERSION }}.* ./publish/$LATEST_VERSION/ 2>/dev/null || true
+        # sudo cp install-image-${{ env.LATEST_VERSION }}.zip ./publish/$LATEST_VERSION/ 2>/dev/null || true
+        echo $LATEST_VERSION $BUILD_TIME | sudo tee ./publish/NEWESTa7.${{ matrix.channel }}
+
+    - name: Upload Files
+      if: steps.get_latest.outputs.has_new_version == 'true' && env.RELEASE == 'true'
+      run: |
         sudo chown -R root:root ./publish/
-        
         LOCAL_PATH=./publish/$LATEST_VERSION
         REMOTE_PATH=${{ secrets.SSH_DIRECTORY }}
         SERVER=${{ secrets.SSH_SERVER }}
@@ -702,10 +720,22 @@ jobs:
           "echo $LATEST_VERSION $BUILD_TIME | tee /rw/disk/$REMOTE_PATH/NEWESTa7.$CHANNEL; bash /rw/disk/$REMOTE_PATH/packages.sh /rw/disk/$REMOTE_PATH/$LATEST_VERSION"
 
         sshpass -p "$PASS" ssh -o StrictHostKeyChecking=no -p $PORT $USER@$SERVER \
-          "chown -R 32768:32768 /rw/disk/$REMOTE_PATH/"
+          "chown -R 32768:32768 /rw/disk/$REMOTE_PATH/" 
+          
+    # - name: Upload to R2 Bucket
+    #   if: steps.get_latest.outputs.has_new_version == 'true' && env.RELEASE == 'true'
+    #   uses: ryand56/r2-upload-action@latest
+    #   with:
+    #     r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+    #     r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+    #     r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    #     r2-bucket: routeros
+    #     source-dir: ./publish
+    #     destination-dir: ./routeros
+    #     keep-file-fresh: true
+    #     output-file-url: false
 
-
-
+    
     - name: Clear Cloudflare cache
       if: steps.get_latest.outputs.has_new_version == 'true' && env.RELEASE == 'true'
       run: |
@@ -717,6 +747,7 @@ jobs:
     - name: Delete Release tag ${{ env.LATEST_VERSION }} ${{ env.ARCH }}
       if: steps.get_latest.outputs.has_new_version == 'true' && env.RELEASE == 'true'
       run: |
+        sed -i "1i Build Time:$BUILD_TIME" CHANGELOG
         HEADER="Authorization: token ${{ secrets.GITHUB_TOKEN }}"
         RELEASE_INFO=$(curl -s -H "$HEADER" https://api.github.com/repos/${{ github.repository }}/releases/tags/$LATEST_VERSION$ARCH)
         RELEASE_ID=$(echo $RELEASE_INFO | jq -r '.id')
